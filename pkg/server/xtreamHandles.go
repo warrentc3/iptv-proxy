@@ -32,9 +32,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jamesnetherton/m3u"
 	xtreamapi "github.com/pierre-emmanuelJ/iptv-proxy/pkg/xtream-proxy"
-	uuid "github.com/satori/go.uuid"
 )
 
 type cacheMeta struct {
@@ -57,7 +57,7 @@ func (c *Config) cacheXtreamM3u(playlist *m3u.Playlist, cacheName string) error 
 	tmp := *c
 	tmp.playlist = playlist
 
-	path := filepath.Join(os.TempDir(), uuid.NewV4().String()+".iptv-proxy.m3u")
+	path := filepath.Join(os.TempDir(), uuid.New().String()+".iptv-proxy.m3u")
 	f, err := os.Create(path)
 	if err != nil {
 		return err

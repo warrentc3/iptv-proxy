@@ -105,6 +105,9 @@ github.com/goccy/go-yaml/parser
 github.com/goccy/go-yaml/printer
 github.com/goccy/go-yaml/scanner
 github.com/goccy/go-yaml/token
+# github.com/google/uuid v1.6.0
+## explicit
+github.com/google/uuid
 # github.com/jamesnetherton/m3u v0.4.0
 ## explicit; go 1.17
 github.com/jamesnetherton/m3u
@@ -156,9 +159,6 @@ github.com/quic-go/quic-go/qlog
 github.com/quic-go/quic-go/qlogwriter
 github.com/quic-go/quic-go/qlogwriter/jsontext
 github.com/quic-go/quic-go/quicvarint
-# github.com/satori/go.uuid v1.2.0
-## explicit
-github.com/satori/go.uuid
 # github.com/tellytv/go.xtream-codes v0.0.0-20220204001149-59925bc76764
 ## explicit; go 1.17
 github.com/tellytv/go.xtream-codes

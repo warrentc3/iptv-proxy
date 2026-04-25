@@ -29,15 +29,15 @@ import (
 	"strings"
 
 	"github.com/gin-contrib/cors"
+	"github.com/google/uuid"
 	"github.com/jamesnetherton/m3u"
 	"github.com/pierre-emmanuelJ/iptv-proxy/pkg/config"
-	uuid "github.com/satori/go.uuid"
 
 	"github.com/gin-gonic/gin"
 )
 
-var defaultProxyfiedM3UPath = filepath.Join(os.TempDir(), uuid.NewV4().String()+".iptv-proxy.m3u")
-var endpointAntiColision = strings.Split(uuid.NewV4().String(), "-")[0]
+var defaultProxyfiedM3UPath = filepath.Join(os.TempDir(), uuid.New().String()+".iptv-proxy.m3u")
+var endpointAntiColision = strings.Split(uuid.New().String(), "-")[0]
 
 // Config represent the server configuration
 type Config struct {

@@ -3,8 +3,8 @@ module github.com/pierre-emmanuelJ/iptv-proxy
 require (
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
+	github.com/google/uuid v1.6.0
 	github.com/jamesnetherton/m3u v0.4.0
-	github.com/satori/go.uuid v1.2.0
 	github.com/tellytv/go.xtream-codes v0.0.0-20220204001149-59925bc76764
 )
 
