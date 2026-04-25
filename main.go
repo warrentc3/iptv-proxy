@@ -91,6 +91,7 @@ func buildConfig() (*config.ProxyConfig, error) {
 		XtreamUser:           config.CredentialString(xtreamUser),
 		XtreamPassword:       config.CredentialString(xtreamPassword),
 		XtreamBaseURL:        xtreamBaseURL,
+		XtreamUserAgent:      getenv("XC_USER_AGENT", ""),
 		XtreamGenerateApiGet: getenvBool("XC_XTREAM_API_GET", false),
 		M3UCacheExpiration:   getenvInt("XC_M3U_CACHE_EXPIRATION", 1),
 		User:                 config.CredentialString(getenv("XC_PROXY_USER", "usertest")),

@@ -41,12 +41,23 @@ type HostConfiguration struct {
 	Port     int
 }
 
+// UpstreamUserAgent returns the User-Agent to use for upstream Xtream calls.
+// When XtreamUserAgent is set, it overrides the client UA; otherwise the
+// client UA is passed through unchanged.
+func (p *ProxyConfig) UpstreamUserAgent(clientUA string) string {
+	if p.XtreamUserAgent != "" {
+		return p.XtreamUserAgent
+	}
+	return clientUA
+}
+
 // ProxyConfig Contain original m3u playlist and HostConfiguration
 type ProxyConfig struct {
 	HostConfig           *HostConfiguration
 	XtreamUser           CredentialString
 	XtreamPassword       CredentialString
 	XtreamBaseURL        string
+	XtreamUserAgent      string
 	XtreamGenerateApiGet bool
 	M3UCacheExpiration   int
 	M3UFileName          string
