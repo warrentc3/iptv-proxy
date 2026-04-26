@@ -378,13 +378,22 @@ func (c *Config) xtreamHlsStream(ctx *gin.Context) {
 		return
 	}
 
+	token, ret := ctx.GetQuery("token")
+	if !ret {
+		ctx.AbortWithError( // nolint: errcheck
+			http.StatusInternalServerError,
+			errors.New("HLS token missing from request"),
+		)
+		return
+	}
+
 	req, err := url.Parse(
 		fmt.Sprintf(
-			"%s://%s/hls/%s/%s",
+			"%s://%s/hls/%s?token=%s",
 			url.Scheme,
 			url.Host,
-			ctx.Param("token"),
 			ctx.Param("chunk"),
+			token,
 		),
 	)
 
