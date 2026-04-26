@@ -100,8 +100,6 @@ func buildConfig() (*config.ProxyConfig, error) {
 		AdvertisedPort:       advertisedPort,
 		HTTPS:                getenvBool("XC_HTTPS", false),
 		M3UFileName:          getenv("XC_M3U_FILE_NAME", "iptv.m3u"),
-		CustomEndpoint:       getenv("XC_CUSTOM_ENDPOINT", ""),
-		CustomId:             getenv("XC_CUSTOM_ID", ""),
 	}, nil
 }
 

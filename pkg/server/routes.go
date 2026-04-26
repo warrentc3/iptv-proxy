@@ -36,7 +36,7 @@ import (
 var registeredRoutes = map[string]struct{}{}
 
 func (c *Config) routes(r *gin.RouterGroup) {
-	r = r.Group(c.CustomEndpoint)
+	r = r.Group(xcpNamespace)
 
 	//Xtream service endopoints
 	if c.ProxyConfig.XtreamBaseURL != "" {
@@ -94,13 +94,13 @@ func (c *Config) m3uRoutes(r *gin.RouterGroup) {
 		}
 
 		if strings.HasSuffix(track.URI, ".m3u8") {
-			key := fmt.Sprintf("/%s/%s/%s/%d/:id", c.endpointAntiColision, c.User, c.Password, i)
+			key := fmt.Sprintf("/%s/%s/%s/%d/:id", xcpNamespace, c.User, c.Password, i)
 			if _, exists := registeredRoutes[key]; !exists {
 				registeredRoutes[key] = struct{}{}
 				r.GET(key, trackConfig.m3u8ReverseProxy)
 			}
 		} else {
-			key := fmt.Sprintf("/%s/%s/%s/%d/%s", c.endpointAntiColision, c.User, c.Password, i, u.Path)
+			key := fmt.Sprintf("/%s/%s/%s/%d/%s", xcpNamespace, c.User, c.Password, i, u.Path)
 			if _, exists := registeredRoutes[key]; !exists {
 				registeredRoutes[key] = struct{}{}
 				r.GET(key, trackConfig.reverseProxy)

@@ -38,7 +38,13 @@ import (
 )
 
 var defaultProxyfiedM3UPath = filepath.Join(os.TempDir(), uuid.New().String()+".iptv-proxy.m3u")
-var endpointAntiColision = strings.Split(uuid.New().String(), "-")[0]
+
+// xcpNamespace is the hardcoded route-namespace prefix used in both the
+// outer route group and the inner anti-collision slot of m3u track URLs.
+// Replaces the prior CustomEndpoint / CustomId env-var pair plus the
+// random-per-startup anti-collision token. Stable URLs across restarts
+// are now structural rather than configurable. See EVAL B23 + framing #8.
+const xcpNamespace = "xcp"
 
 // Config represent the server configuration
 type Config struct {
@@ -50,8 +56,6 @@ type Config struct {
 	track *m3u.Track
 	// path to the proxyfied m3u file
 	proxyfiedM3UPath string
-
-	endpointAntiColision string
 }
 
 // NewServer initialize a new server configuration
@@ -65,16 +69,11 @@ func NewServer(config *config.ProxyConfig) (*Config, error) {
 		}
 	}
 
-        if trimmedCustomId := strings.Trim(config.CustomId, "/"); trimmedCustomId != "" {
-                endpointAntiColision = trimmedCustomId
-        }
-
 	return &Config{
 		config,
 		&p,
 		nil,
 		defaultProxyfiedM3UPath,
-		endpointAntiColision,
 	}, nil
 }
 
@@ -153,17 +152,12 @@ func (c *Config) replaceURL(uri string, trackIndex int, xtream bool) (string, er
 		protocol = "https"
 	}
 
-	customEnd := strings.Trim(c.CustomEndpoint, "/")
-	if customEnd != "" {
-		customEnd = fmt.Sprintf("/%s", customEnd)
-	}
-
 	uriPath := oriURL.EscapedPath()
 	if xtream {
 		uriPath = strings.ReplaceAll(uriPath, c.XtreamUser.PathEscape(), c.User.PathEscape())
 		uriPath = strings.ReplaceAll(uriPath, c.XtreamPassword.PathEscape(), c.Password.PathEscape())
 	} else {
-		uriPath = path.Join("/", c.endpointAntiColision, c.User.PathEscape(), c.Password.PathEscape(), fmt.Sprintf("%d", trackIndex), path.Base(uriPath))
+		uriPath = path.Join("/", xcpNamespace, c.User.PathEscape(), c.Password.PathEscape(), fmt.Sprintf("%d", trackIndex), path.Base(uriPath))
 	}
 
 	basicAuth := oriURL.User.String()
@@ -172,12 +166,12 @@ func (c *Config) replaceURL(uri string, trackIndex int, xtream bool) (string, er
 	}
 
 	newURI := fmt.Sprintf(
-		"%s://%s%s:%d%s%s",
+		"%s://%s%s:%d/%s%s",
 		protocol,
 		basicAuth,
 		c.HostConfig.Hostname,
 		c.AdvertisedPort,
-		customEnd,
+		xcpNamespace,
 		uriPath,
 	)
 
