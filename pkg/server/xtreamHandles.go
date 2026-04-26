@@ -130,13 +130,13 @@ func (c *Config) xtreamGenerateM3u(ctx *gin.Context, extension string) (*m3u.Pla
 
 func (c *Config) xtreamGetAuto(ctx *gin.Context) {
 	newQuery := ctx.Request.URL.Query()
-	q := c.RemoteURL.Query()
-	for k, v := range q {
-		if k == "username" || k == "password" {
-			continue
+	if c.RemoteURL != nil {
+		for k, v := range c.RemoteURL.Query() {
+			if k == "username" || k == "password" {
+				continue
+			}
+			newQuery.Add(k, strings.Join(v, ","))
 		}
-
-		newQuery.Add(k, strings.Join(v, ","))
 	}
 	ctx.Request.URL.RawQuery = newQuery.Encode()
 

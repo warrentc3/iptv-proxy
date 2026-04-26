@@ -62,6 +62,10 @@ type Config struct {
 
 // NewServer initialize a new server configuration
 func NewServer(config *config.ProxyConfig) (*Config, error) {
+	if config.RemoteURL == nil && config.XtreamBaseURL == "" {
+		return nil, fmt.Errorf("at least one of SOURCE_M3U_URL or SOURCE_XC_BASE_URL must be set")
+	}
+
 	var p m3u.Playlist
 	if config.RemoteURL != nil && config.RemoteURL.String() != "" {
 		var err error

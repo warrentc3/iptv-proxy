@@ -36,7 +36,8 @@ func (c *Config) routes(r *gin.RouterGroup) {
 	//Xtream service endopoints
 	if c.ProxyConfig.XtreamBaseURL != "" {
 		c.xtreamRoutes(r)
-		if strings.Contains(c.XtreamBaseURL, c.RemoteURL.Host) &&
+		if c.RemoteURL != nil &&
+			strings.Contains(c.XtreamBaseURL, c.RemoteURL.Host) &&
 			c.XtreamUser.String() == c.RemoteURL.Query().Get("username") &&
 			c.XtreamPassword.String() == c.RemoteURL.Query().Get("password") {
 
