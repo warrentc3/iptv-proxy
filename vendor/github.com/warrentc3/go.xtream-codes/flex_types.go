@@ -25,13 +25,17 @@ func (t Timestamp) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON converts the int or string to a Unix timestamp.
 func (t *Timestamp) UnmarshalJSON(b []byte) error {
-	// Timestamps are sometimes quoted, sometimes not, lets just always remove quotes just in case...
-	t.quoted = strings.Contains(string(b), `"`)
-	ts, err := strconv.Atoi(strings.Replace(string(b), `"`, "", -1))
+	b = bytes.TrimSpace(b)
+	t.quoted = len(b) > 0 && b[0] == '"'
+	s := strings.Trim(string(b), `"`)
+	if len(s) == 0 {
+		return nil
+	}
+	ts, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
 		return err
 	}
-	t.Time = time.Unix(int64(ts), 0)
+	t.Time = time.Unix(ts, 0)
 	return nil
 }
 
@@ -39,6 +43,23 @@ func (t *Timestamp) UnmarshalJSON(b []byte) error {
 type ConvertibleBoolean struct {
 	bool
 	quoted bool
+}
+
+// Bool returns the underlying bool value.
+func (bit ConvertibleBoolean) Bool() bool { return bit.bool }
+
+// IsZero reports whether the ConvertibleBoolean holds the zero value
+// (false, unquoted). Combined with json `omitzero` (Go 1.24+) for
+// targeted elision; do not apply to fields where false-vs-absent is a
+// distinction the caller relies on.
+func (bit ConvertibleBoolean) IsZero() bool { return !bit.bool && !bit.quoted }
+
+// String implements fmt.Stringer.
+func (bit ConvertibleBoolean) String() string {
+	if bit.bool {
+		return "true"
+	}
+	return "false"
 }
 
 // MarshalJSON returns a 0 or 1 depending on bool state.
@@ -57,62 +78,111 @@ func (bit ConvertibleBoolean) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON converts a 0, 1, true or false into a bool
 func (bit *ConvertibleBoolean) UnmarshalJSON(data []byte) error {
-	bit.quoted = strings.Contains(string(data), `"`)
-	// Bools as ints are sometimes quoted, sometimes not, lets just always remove quotes just in case...
-	asString := strings.Replace(string(data), `"`, "", -1)
-	if asString == "1" || asString == "true" {
+	data = bytes.TrimSpace(data)
+	bit.quoted = len(data) > 0 && data[0] == '"'
+	asString := strings.Trim(string(data), `"`)
+	switch asString {
+	case "1", "true":
 		bit.bool = true
-	} else if asString == "0" || asString == "false" {
+	case "0", "false":
 		bit.bool = false
-	} else {
+	default:
 		return fmt.Errorf("Boolean unmarshal error: invalid input %s", asString)
 	}
 	return nil
 }
 
-// FlexInt is a int64 which unmarshals from JSON
-// as either unquoted or quoted (with any amount
-// of internal leading/trailing whitespace).
-// Originally found at https://bit.ly/2NkJ0SK and
-// https://play.golang.org/p/KNPxDL1yqL
-type FlexInt int64
+// FlexInt unmarshals from JSON as either a quoted or unquoted integer,
+// preserving the original quoting form so round-trip marshaling is faithful.
+type FlexInt struct {
+	value  int64
+	quoted bool
+}
+
+// NewFlexInt creates a FlexInt from an int64 value.
+func NewFlexInt(v int64) FlexInt { return FlexInt{value: v} }
+
+// IsZero reports whether the FlexInt holds the zero value. Combined with
+// the json `omitzero` tag (Go 1.24+), this allows targeted elision of
+// absent-equals-zero fields without affecting fields where a zero value
+// carries semantic signal.
+func (f FlexInt) IsZero() bool { return f.value == 0 }
+
+// Int64 returns the underlying int64 value.
+func (f FlexInt) Int64() int64 { return f.value }
+
+// Int returns the underlying value as int.
+func (f FlexInt) Int() int { return int(f.value) }
+
+// String implements fmt.Stringer.
+func (f FlexInt) String() string { return strconv.FormatInt(f.value, 10) }
 
 func (f FlexInt) MarshalJSON() ([]byte, error) {
-	return json.Marshal(int64(f))
+	if f.quoted {
+		return []byte(`"` + strconv.FormatInt(f.value, 10) + `"`), nil
+	}
+	return json.Marshal(f.value)
 }
 
+// UnmarshalJSON is intentionally tolerant: malformed numerics coerce to
+// zero rather than failing the enclosing record's decode. Providers in the
+// wild emit empty strings, nulls, and occasional non-numeric strings on
+// fields the contract treats as integers; record-level decode failure is
+// worse than zero-coercion in this domain. Callers that need to distinguish
+// "explicit zero" from "coerced bad input" should validate at a higher level.
 func (f *FlexInt) UnmarshalJSON(data []byte) error {
-	var v int64
-
+	data = bytes.TrimSpace(data)
+	f.quoted = len(data) > 0 && data[0] == '"'
 	data = bytes.Trim(data, `" `)
-
-	err := json.Unmarshal(data, &v)
-	*f = FlexInt(v)
-	return err
+	if len(data) == 0 {
+		f.value = 0
+		return nil
+	}
+	if err := json.Unmarshal(data, &f.value); err != nil {
+		f.value = 0
+	}
+	return nil
 }
 
-type FlexFloat float64
+// FlexFloat unmarshals from JSON as either a quoted or unquoted float,
+// preserving the original quoting form so round-trip marshaling is faithful.
+type FlexFloat struct {
+	value  float64
+	quoted bool
+}
+
+// Float64 returns the underlying float64 value.
+func (ff FlexFloat) Float64() float64 { return ff.value }
+
+// String implements fmt.Stringer.
+func (ff FlexFloat) String() string { return strconv.FormatFloat(ff.value, 'f', -1, 64) }
+
+func (ff FlexFloat) MarshalJSON() ([]byte, error) {
+	if ff.quoted {
+		return []byte(`"` + strconv.FormatFloat(ff.value, 'f', -1, 64) + `"`), nil
+	}
+	return json.Marshal(ff.value)
+}
 
 func (ff *FlexFloat) UnmarshalJSON(b []byte) error {
-	if b[0] != '"' {
-		return json.Unmarshal(b, (*float64)(ff))
+	b = bytes.TrimSpace(b)
+	ff.quoted = len(b) > 0 && b[0] == '"'
+	if ff.quoted {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		if len(s) == 0 {
+			s = "0"
+		}
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			f = 0
+		}
+		ff.value = f
+		return nil
 	}
-
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-
-	if len(s) == 0 {
-		s = "0"
-	}
-
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		f = 0
-	}
-	*ff = FlexFloat(f)
-	return nil
+	return json.Unmarshal(b, &ff.value)
 }
 
 // JSONStringSlice is a struct containing a slice of strings.
@@ -133,6 +203,9 @@ func (b JSONStringSlice) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON sets *b to a copy of data.
 func (b *JSONStringSlice) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
 	if data[0] == '"' {
 		data = append([]byte(`[`), data...)
 		data = append(data, []byte(`]`)...)

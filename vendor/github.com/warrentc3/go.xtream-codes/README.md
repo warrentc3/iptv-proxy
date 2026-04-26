@@ -1,2 +1,7 @@
 # go.xtream-codes
-A Go library for accessing Xtream-Codes servers
+
+Fork of [tellytv/go.xtream-codes](https://github.com/tellytv/go.xtream-codes). Updates Go version and dependencies; reshapes structs to be more resilient to source variants.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
