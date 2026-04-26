@@ -1,5 +1,6 @@
 /*
  * Iptv-Proxy is a project to proxyfie an m3u file and to proxyfie an Xtream iptv service (client API).
+ * Copyright (C) 2026  warrentc3
  * Copyright (C) 2020  Pierre-Emmanuel Jacquier
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,11 +21,19 @@ package server
 
 import (
 	"fmt"
-	"path"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+// registeredRoutes guards M3U track route registration against gin's
+// panic-on-duplicate when a playlist contains tracks whose URIs collapse
+// to the same gin route key (e.g. tracks differing only by query string,
+// or literal duplicates in a malformed playlist). Package-level scope is
+// safe under the single-server-per-process assumption; multi-instance
+// isolation would require moving this onto Config.
+var registeredRoutes = map[string]struct{}{}
 
 func (c *Config) routes(r *gin.RouterGroup) {
 	r = r.Group(c.CustomEndpoint)
@@ -74,15 +83,28 @@ func (c *Config) m3uRoutes(r *gin.RouterGroup) {
 	r.POST("/"+c.M3UFileName, c.authenticate, c.getM3U)
 
 	for i, track := range c.playlist.Tracks {
+		u, err := url.Parse(track.URI)
+		if err != nil {
+			continue
+		}
+
 		trackConfig := &Config{
 			ProxyConfig: c.ProxyConfig,
 			track:       &c.playlist.Tracks[i],
 		}
 
 		if strings.HasSuffix(track.URI, ".m3u8") {
-			r.GET(fmt.Sprintf("/%s/%s/%s/%d/:id", c.endpointAntiColision, c.User, c.Password, i), trackConfig.m3u8ReverseProxy)
+			key := fmt.Sprintf("/%s/%s/%s/%d/:id", c.endpointAntiColision, c.User, c.Password, i)
+			if _, exists := registeredRoutes[key]; !exists {
+				registeredRoutes[key] = struct{}{}
+				r.GET(key, trackConfig.m3u8ReverseProxy)
+			}
 		} else {
-			r.GET(fmt.Sprintf("/%s/%s/%s/%d/%s", c.endpointAntiColision, c.User, c.Password, i, path.Base(track.URI)), trackConfig.reverseProxy)
+			key := fmt.Sprintf("/%s/%s/%s/%d/%s", c.endpointAntiColision, c.User, c.Password, i, u.Path)
+			if _, exists := registeredRoutes[key]; !exists {
+				registeredRoutes[key] = struct{}{}
+				r.GET(key, trackConfig.reverseProxy)
+			}
 		}
 	}
 }
