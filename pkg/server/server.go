@@ -32,7 +32,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/google/uuid"
 	"github.com/jamesnetherton/m3u"
-	"github.com/pierre-emmanuelJ/iptv-proxy/pkg/config"
+	"github.com/warrentc3/iptv-proxy/pkg/config"
 
 	"github.com/gin-gonic/gin"
 )

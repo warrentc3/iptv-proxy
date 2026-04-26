@@ -35,7 +35,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jamesnetherton/m3u"
-	xtreamapi "github.com/pierre-emmanuelJ/iptv-proxy/pkg/xtream-proxy"
+	xtreamapi "github.com/warrentc3/iptv-proxy/pkg/xtream-proxy"
 )
 
 type cacheMeta struct {

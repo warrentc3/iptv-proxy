@@ -27,8 +27,8 @@ import (
 
 	"github.com/qdm12/gosettings/reader"
 
-	"github.com/pierre-emmanuelJ/iptv-proxy/pkg/config"
-	"github.com/pierre-emmanuelJ/iptv-proxy/pkg/server"
+	"github.com/warrentc3/iptv-proxy/pkg/config"
+	"github.com/warrentc3/iptv-proxy/pkg/server"
 )
 
 func main() {
