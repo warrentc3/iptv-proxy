@@ -23,9 +23,9 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"os"
-	"strconv"
 	"strings"
+
+	"github.com/qdm12/gosettings/reader"
 
 	"github.com/pierre-emmanuelJ/iptv-proxy/pkg/config"
 	"github.com/pierre-emmanuelJ/iptv-proxy/pkg/server"
@@ -45,20 +45,47 @@ func main() {
 	}
 }
 
+// buildConfig reads all iptv-proxy configuration from the environment.
+//
+// Env var naming follows three categorical prefixes that name the surface
+// the variable operates on:
+//
+//   - SOURCE_*   — what the proxy reads from (M3U URL, XC provider creds
+//     and behaviors, UA sent to the source).
+//   - PROXY_*    — what the proxy exposes to the player (auth credentials
+//     and the served M3U filename).
+//   - REWRITE_*  — what the proxy emits in URLs (hostname, ports, scheme).
+//
+// Most variables carry retroactive key support for the upstream-original
+// names; gosettings logs a deprecation warning when an old name is used.
+// Two have no retro by design: SOURCE_UA_OVERRIDE (net-new — pierre had
+// no UA override) and REWRITE_HOSTNAME (deliberately no back-compat for
+// HOSTNAME, which Docker auto-sets and silently consumed in the old code).
+//
+// Parse errors on integer / boolean values are surfaced as startup errors
+// rather than silently falling back to a default. Bad config fails loudly.
 func buildConfig() (*config.ProxyConfig, error) {
-	m3uURL := getenv("M3U_URL", "")
+	r := reader.New(reader.Settings{
+		HandleDeprecatedKey: func(source, deprecatedKey, currentKey string) {
+			log.Printf("[iptv-proxy] DEPRECATED: %s env var %q is deprecated, use %q instead",
+				source, deprecatedKey, currentKey)
+		},
+		DefaultOptions: []reader.Option{reader.ForceLowercase(false)},
+	})
+
+	m3uURL := r.String("SOURCE_M3U_URL", reader.RetroKeys("M3U_URL"))
 	var remoteURL *url.URL
 	if m3uURL != "" {
 		u, err := url.Parse(m3uURL)
 		if err != nil {
-			return nil, fmt.Errorf("invalid M3U_URL: %w", err)
+			return nil, fmt.Errorf("invalid SOURCE_M3U_URL: %w", err)
 		}
 		remoteURL = u
 	}
 
-	xtreamUser := getenv("XC_USER", "")
-	xtreamPassword := getenv("XC_PASSWORD", "")
-	xtreamBaseURL := getenv("XC_BASE_URL", "")
+	xtreamUser := r.String("SOURCE_XC_USER", reader.RetroKeys("XTREAM_USER"))
+	xtreamPassword := r.String("SOURCE_XC_PASSWORD", reader.RetroKeys("XTREAM_PASSWORD"))
+	xtreamBaseURL := r.String("SOURCE_XC_BASE_URL", reader.RetroKeys("XTREAM_BASE_URL"))
 
 	// Auto-detect Xtream credentials from M3U URL when /get.php is present.
 	if remoteURL != nil && strings.Contains(m3uURL, "/get.php") {
@@ -77,55 +104,84 @@ func buildConfig() (*config.ProxyConfig, error) {
 		}
 	}
 
-	port := getenvInt("XCPort", getenvInt("XC_PORT", 8080))
-	advertisedPort := getenvInt("XC_ADVERTISED_PORT", 0)
+	port, err := r.Int("REWRITE_PORT", reader.RetroKeys("PORT"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid REWRITE_PORT: %w", err)
+	}
+	if port == 0 {
+		port = 8080
+	}
+
+	advertisedPort, err := r.Int("REWRITE_REVPROXY_PORT", reader.RetroKeys("ADVERTISED_PORT"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid REWRITE_REVPROXY_PORT: %w", err)
+	}
 	if advertisedPort == 0 {
 		advertisedPort = port
 	}
 
+	cachedM3UTTL, err := r.Int("SOURCE_XC_CACHED_M3U_TTL", reader.RetroKeys("M3U_CACHE_EXPIRATION"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid SOURCE_XC_CACHED_M3U_TTL: %w", err)
+	}
+	if cachedM3UTTL == 0 {
+		cachedM3UTTL = 1
+	}
+
+	httpsPtr, err := r.BoolPtr("REWRITE_HTTPS", reader.RetroKeys("HTTPS"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid REWRITE_HTTPS: %w", err)
+	}
+	https := false
+	if httpsPtr != nil {
+		https = *httpsPtr
+	}
+
+	// SOURCE_XC_APIGET_NOBACKCOMPAT preserves the value semantics of the
+	// upstream XTREAM_API_GET flag (true = use /apiget which includes
+	// Series and VOD; default false = back-compat to the simpler /get.php
+	// behavior). The rename names the existence-of-the-flag as itself a
+	// back-compat affordance — three years on, the legacy default is the
+	// one most operators no longer want, but we keep the toggle for those
+	// who do.
+	apigetNoBackcompatPtr, err := r.BoolPtr("SOURCE_XC_APIGET_NOBACKCOMPAT", reader.RetroKeys("XTREAM_API_GET"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid SOURCE_XC_APIGET_NOBACKCOMPAT: %w", err)
+	}
+	apigetNoBackcompat := false
+	if apigetNoBackcompatPtr != nil {
+		apigetNoBackcompat = *apigetNoBackcompatPtr
+	}
+
+	proxyUser := r.String("PROXY_USER", reader.RetroKeys("USER"))
+	if proxyUser == "" {
+		proxyUser = "usertest"
+	}
+	proxyPassword := r.String("PROXY_PASSWORD", reader.RetroKeys("PASSWORD"))
+	if proxyPassword == "" {
+		proxyPassword = "passwordtest"
+	}
+	m3uFileName := r.String("PROXY_M3U", reader.RetroKeys("M3U_FILE_NAME"))
+	if m3uFileName == "" {
+		m3uFileName = "iptv.m3u"
+	}
+
 	return &config.ProxyConfig{
 		HostConfig: &config.HostConfiguration{
-			Hostname: getenv("XC_HOST", ""),
+			Hostname: r.String("REWRITE_HOSTNAME"),
 			Port:     port,
 		},
 		RemoteURL:            remoteURL,
 		XtreamUser:           config.CredentialString(xtreamUser),
 		XtreamPassword:       config.CredentialString(xtreamPassword),
 		XtreamBaseURL:        xtreamBaseURL,
-		XtreamUserAgent:      getenv("XC_USER_AGENT", ""),
-		XtreamGenerateApiGet: getenvBool("XC_XTREAM_API_GET", false),
-		M3UCacheExpiration:   getenvInt("XC_M3U_CACHE_EXPIRATION", 1),
-		User:                 config.CredentialString(getenv("XC_PROXY_USER", "usertest")),
-		Password:             config.CredentialString(getenv("XC_PROXY_PASSWORD", "passwordtest")),
+		XtreamUserAgent:      r.String("SOURCE_UA_OVERRIDE"),
+		XtreamGenerateApiGet: apigetNoBackcompat,
+		M3UCacheExpiration:   cachedM3UTTL,
+		User:                 config.CredentialString(proxyUser),
+		Password:             config.CredentialString(proxyPassword),
 		AdvertisedPort:       advertisedPort,
-		HTTPS:                getenvBool("XC_HTTPS", false),
-		M3UFileName:          getenv("XC_M3U_FILE_NAME", "iptv.m3u"),
+		HTTPS:                https,
+		M3UFileName:          m3uFileName,
 	}, nil
-}
-
-func getenv(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok {
-		return v
-	}
-	return fallback
-}
-
-func getenvInt(key string, fallback int) int {
-	v := strings.TrimSpace(os.Getenv(key))
-	if v == "" {
-		return fallback
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return fallback
-	}
-	return n
-}
-
-func getenvBool(key string, fallback bool) bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
-	if v == "" {
-		return fallback
-	}
-	return v == "true" || v == "1" || v == "yes"
 }

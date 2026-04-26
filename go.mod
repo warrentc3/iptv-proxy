@@ -5,6 +5,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0
 	github.com/jamesnetherton/m3u v0.4.0
+	github.com/qdm12/gosettings v0.4.4
 	github.com/warrentc3/go.xtream-codes v0.0.0-20220204001149-59925bc76764
 )
 
@@ -34,10 +35,13 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.5.1 // indirect
 	golang.org/x/arch v0.26.0 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	kernel.org/pub/linux/libs/security/libcap/cap v1.2.69 // indirect
+	kernel.org/pub/linux/libs/security/libcap/psx v1.2.69 // indirect
 )
 
 replace github.com/warrentc3/go.xtream-codes => ../go.xtream-codes

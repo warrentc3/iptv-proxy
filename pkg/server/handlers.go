@@ -104,10 +104,12 @@ func (c *Config) stream(ctx *gin.Context, oriURL *url.URL) {
 // shouldRetryWithoutRange reports whether an upstream's 206 Partial Content
 // response is effectively empty — a sign that the upstream advertises range
 // support in the status code but does not actually return the requested
-// bytes. Some Xtream upstreams emit 206 with Content-Length: 0 (or omit
-// Content-Length entirely while writing nothing) when the requested range
-// cannot be satisfied; players given that response stop instead of falling
-// back to a full-body request.
+// bytes. Detection is conservative: only Content-Length: 0 (explicit) is
+// recognized. The body itself is not peeked, so a 206 with chunked encoding
+// or omitted Content-Length that happens to be empty will not trigger the
+// retry. Players given an empty 206 stop instead of falling back to a
+// full-body request, so retrying without Range surfaces playable bytes
+// when the upstream supports a full GET.
 func shouldRetryWithoutRange(resp *http.Response) bool {
 	if resp.StatusCode != http.StatusPartialContent {
 		return false

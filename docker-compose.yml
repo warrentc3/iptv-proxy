@@ -5,28 +5,36 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      # If your are using local m3u file instead of m3u remote file
-      # put your m3u file in this folder
+      # If you are using a local m3u file instead of a remote one,
+      # put your m3u file in this folder.
       - ./iptv:/root/iptv
     container_name: "iptv-proxy"
     restart: on-failure
     ports:
-      # have to be the same as ENV variable PORT
+      # Must match REWRITE_PORT.
       - 8080:8080
     environment:
-      # if you are using m3u remote file
-      # M3U_URL: https://example.com/iptvfile.m3u
-      M3U_URL: /root/iptv/iptv.m3u
-      # Port to expose the IPTVs endpoints
-      PORT: 8080
-      # Hostname or IP to expose the IPTVs endpoints (for machine not for docker)
-      HOSTNAME: localhost
+      # SOURCE_* — what the proxy reads from.
+      # If using a remote m3u, set SOURCE_M3U_URL: https://example.com/iptv.m3u
+      SOURCE_M3U_URL: /root/iptv/iptv.m3u
+      ## Xtream-Codes provider connection (uncomment / set as needed)
+      # SOURCE_XC_BASE_URL: "http://provider.example.tv:8080"
+      # SOURCE_XC_USER: xtream_user
+      # SOURCE_XC_PASSWORD: xtream_password
+      # SOURCE_XC_CACHED_M3U_TTL: 1            # hours
+      # SOURCE_XC_APIGET_NOBACKCOMPAT: "true"  # opt into the modern /apiget that includes Series + VOD
+      # SOURCE_UA_OVERRIDE: ""                 # set when the provider gates on a specific UA
+
+      # PROXY_* — what the proxy exposes to the player.
+      ##### UNSAFE DEFAULTS — set real values before exposing the proxy.
+      PROXY_USER: test
+      PROXY_PASSWORD: testpassword
+      # PROXY_M3U: iptv.m3u                    # filename served as the player-facing M3U
+
+      # REWRITE_* — what the proxy emits in URLs.
+      REWRITE_HOSTNAME: localhost              # hostname/IP advertised to clients
+      REWRITE_PORT: 8080                       # listen port (must match container ports mapping)
+      # REWRITE_REVPROXY_PORT: 443             # set when behind a reverse proxy on a different external port
+      # REWRITE_HTTPS: "true"                  # emit https:// (use behind TLS-terminating reverse proxy)
+
       GIN_MODE: release
-      ## Xtream-code proxy configuration
-      XTREAM_USER: xtream_user
-      XTREAM_PASSWORD: xtream_password
-      XTREAM_BASE_URL: "http://example.tv:8080"
-      ##### UNSAFE AUTH TODO ADD REAL AUTH
-      #will be used for m3u and xtream auth poxy
-      USER: test
-      PASSWORD: testpassword

@@ -381,7 +381,7 @@ func (c *Config) xtreamHlsStream(ctx *gin.Context) {
 	token, ret := ctx.GetQuery("token")
 	if !ret {
 		ctx.AbortWithError( // nolint: errcheck
-			http.StatusInternalServerError,
+			http.StatusBadRequest,
 			errors.New("HLS token missing from request"),
 		)
 		return

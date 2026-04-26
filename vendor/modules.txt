@@ -136,6 +136,14 @@ github.com/pelletier/go-toml/v2
 github.com/pelletier/go-toml/v2/internal/characters
 github.com/pelletier/go-toml/v2/internal/tracker
 github.com/pelletier/go-toml/v2/unstable
+# github.com/qdm12/gosettings v0.4.4
+## explicit; go 1.21
+github.com/qdm12/gosettings
+github.com/qdm12/gosettings/internal/parse
+github.com/qdm12/gosettings/reader
+github.com/qdm12/gosettings/reader/sources/env
+github.com/qdm12/gosettings/reader/sources/flag
+github.com/qdm12/gosettings/validate
 # github.com/quic-go/qpack v0.6.0
 ## explicit; go 1.24
 github.com/quic-go/qpack
@@ -202,6 +210,10 @@ golang.org/x/crypto/hkdf
 golang.org/x/crypto/internal/alias
 golang.org/x/crypto/internal/poly1305
 golang.org/x/crypto/sha3
+# golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
+## explicit; go 1.20
+golang.org/x/exp/constraints
+golang.org/x/exp/slices
 # golang.org/x/net v0.53.0
 ## explicit; go 1.25.0
 golang.org/x/net/bpf
@@ -246,4 +258,10 @@ google.golang.org/protobuf/proto
 google.golang.org/protobuf/reflect/protoreflect
 google.golang.org/protobuf/reflect/protoregistry
 google.golang.org/protobuf/runtime/protoiface
+# kernel.org/pub/linux/libs/security/libcap/cap v1.2.69
+## explicit; go 1.11
+kernel.org/pub/linux/libs/security/libcap/cap
+# kernel.org/pub/linux/libs/security/libcap/psx v1.2.69
+## explicit; go 1.11
+kernel.org/pub/linux/libs/security/libcap/psx
 # github.com/warrentc3/go.xtream-codes => ../go.xtream-codes

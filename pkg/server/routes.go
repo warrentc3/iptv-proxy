@@ -22,18 +22,11 @@ package server
 import (
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
-
-// registeredRoutes guards M3U track route registration against gin's
-// panic-on-duplicate when a playlist contains tracks whose URIs collapse
-// to the same gin route key (e.g. tracks differing only by query string,
-// or literal duplicates in a malformed playlist). Package-level scope is
-// safe under the single-server-per-process assumption; multi-instance
-// isolation would require moving this onto Config.
-var registeredRoutes = map[string]struct{}{}
 
 func (c *Config) routes(r *gin.RouterGroup) {
 	r = r.Group(xcpNamespace)
@@ -82,6 +75,12 @@ func (c *Config) m3uRoutes(r *gin.RouterGroup) {
 	// XXX Private need: for external Android app
 	r.POST("/"+c.M3UFileName, c.authenticate, c.getM3U)
 
+	// Local-scope dedup: gin panics on duplicate route registration within a
+	// single router; the dedup only needs to scope to this build pass. Keeping
+	// the map local eliminates cross-instance leakage if multiple Server
+	// instances ever share a process.
+	registered := map[string]struct{}{}
+
 	for i, track := range c.playlist.Tracks {
 		u, err := url.Parse(track.URI)
 		if err != nil {
@@ -95,14 +94,20 @@ func (c *Config) m3uRoutes(r *gin.RouterGroup) {
 
 		if strings.HasSuffix(track.URI, ".m3u8") {
 			key := fmt.Sprintf("/%s/%s/%s/%d/:id", xcpNamespace, c.User, c.Password, i)
-			if _, exists := registeredRoutes[key]; !exists {
-				registeredRoutes[key] = struct{}{}
+			if _, exists := registered[key]; !exists {
+				registered[key] = struct{}{}
 				r.GET(key, trackConfig.m3u8ReverseProxy)
 			}
 		} else {
-			key := fmt.Sprintf("/%s/%s/%s/%d/%s", xcpNamespace, c.User, c.Password, i, u.Path)
-			if _, exists := registeredRoutes[key]; !exists {
-				registeredRoutes[key] = struct{}{}
+			// path.Base(u.Path) — single-segment basename from the parsed URL.
+			// Drops query string (avoids the original SOURCE bug of collapsing
+			// query-distinct URIs into the same key) and avoids embedding
+			// multi-segment paths from u.Path that wouldn't match the
+			// player-requested URL emitted by replaceURL (which uses
+			// path.Base on the URI path).
+			key := fmt.Sprintf("/%s/%s/%s/%d/%s", xcpNamespace, c.User, c.Password, i, path.Base(u.Path))
+			if _, exists := registered[key]; !exists {
+				registered[key] = struct{}{}
 				r.GET(key, trackConfig.reverseProxy)
 			}
 		}
