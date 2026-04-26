@@ -1,5 +1,6 @@
 /*
  * Iptv-Proxy is a project to proxyfie an m3u file and to proxyfie an Xtream iptv service (client API).
+ * Copyright (C) 2026  warrentc3
  * Copyright (C) 2020  Pierre-Emmanuel Jacquier
  *
  * This program is free software: you can redistribute it and/or modify
@@ -26,7 +27,7 @@ import (
 	"strconv"
 
 	"github.com/pierre-emmanuelJ/iptv-proxy/pkg/config"
-	xtream "github.com/tellytv/go.xtream-codes"
+	xtream "github.com/warrentc3/go.xtream-codes"
 )
 
 const (
@@ -80,10 +81,10 @@ func (c *Client) login(proxyUser, proxyPassword, proxyURL string, proxyPort int,
 		},
 		ServerInfo: xtream.ServerInfo{
 			URL:          proxyURL,
-			Port:         xtream.FlexInt(proxyPort),
-			HTTPSPort:    xtream.FlexInt(proxyPort),
+			Port:         xtream.NewFlexInt(int64(proxyPort)),
+			HTTPSPort:    xtream.NewFlexInt(int64(proxyPort)),
 			Protocol:     protocol,
-			RTMPPort:     xtream.FlexInt(proxyPort),
+			RTMPPort:     xtream.NewFlexInt(int64(proxyPort)),
 			Timezone:     c.ServerInfo.Timezone,
 			TimestampNow: c.ServerInfo.TimestampNow,
 			TimeNow:      c.ServerInfo.TimeNow,

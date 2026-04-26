@@ -1,5 +1,6 @@
 /*
  * Iptv-Proxy is a project to proxyfie an m3u file and to proxyfie an Xtream iptv service (client API).
+ * Copyright (C) 2026  warrentc3
  * Copyright (C) 2020  Pierre-Emmanuel Jacquier
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,6 +21,7 @@ package server
 
 import (
 	"fmt"
+	"net/url"
 	"path"
 	"strings"
 
@@ -27,7 +29,7 @@ import (
 )
 
 func (c *Config) routes(r *gin.RouterGroup) {
-	r = r.Group(c.CustomEndpoint)
+	r = r.Group(xcpNamespace)
 
 	//Xtream service endopoints
 	if c.ProxyConfig.XtreamBaseURL != "" {
@@ -64,7 +66,7 @@ func (c *Config) xtreamRoutes(r *gin.RouterGroup) {
 	r.GET(fmt.Sprintf("/movie/%s/%s/:id", c.User, c.Password), c.xtreamStreamMovie)
 	r.GET(fmt.Sprintf("/series/%s/%s/:id", c.User, c.Password), c.xtreamStreamSeries)
 	r.GET(fmt.Sprintf("/hlsr/:token/%s/%s/:channel/:hash/:chunk", c.User, c.Password), c.xtreamHlsrStream)
-	r.GET("/hls/:token/:chunk", c.xtreamHlsStream)
+	r.GET("/hls/:chunk", c.xtreamHlsStream)
 	r.GET("/play/:token/:type", c.xtreamStreamPlay)
 }
 
@@ -73,16 +75,41 @@ func (c *Config) m3uRoutes(r *gin.RouterGroup) {
 	// XXX Private need: for external Android app
 	r.POST("/"+c.M3UFileName, c.authenticate, c.getM3U)
 
+	// Local-scope dedup: gin panics on duplicate route registration within a
+	// single router; the dedup only needs to scope to this build pass. Keeping
+	// the map local eliminates cross-instance leakage if multiple Server
+	// instances ever share a process.
+	registered := map[string]struct{}{}
+
 	for i, track := range c.playlist.Tracks {
+		u, err := url.Parse(track.URI)
+		if err != nil {
+			continue
+		}
+
 		trackConfig := &Config{
 			ProxyConfig: c.ProxyConfig,
 			track:       &c.playlist.Tracks[i],
 		}
 
 		if strings.HasSuffix(track.URI, ".m3u8") {
-			r.GET(fmt.Sprintf("/%s/%s/%s/%d/:id", c.endpointAntiColision, c.User, c.Password, i), trackConfig.m3u8ReverseProxy)
+			key := fmt.Sprintf("/%s/%s/%d/:id", c.User, c.Password, i)
+			if _, exists := registered[key]; !exists {
+				registered[key] = struct{}{}
+				r.GET(key, trackConfig.m3u8ReverseProxy)
+			}
 		} else {
-			r.GET(fmt.Sprintf("/%s/%s/%s/%d/%s", c.endpointAntiColision, c.User, c.Password, i, path.Base(track.URI)), trackConfig.reverseProxy)
+			// path.Base(u.Path) — single-segment basename from the parsed URL.
+			// Drops query string (avoids the original SOURCE bug of collapsing
+			// query-distinct URIs into the same key) and avoids embedding
+			// multi-segment paths from u.Path that wouldn't match the
+			// player-requested URL emitted by replaceURL (which uses
+			// path.Base on the URI path).
+			key := fmt.Sprintf("/%s/%s/%d/%s", c.User, c.Password, i, path.Base(u.Path))
+			if _, exists := registered[key]; !exists {
+				registered[key] = struct{}{}
+				r.GET(key, trackConfig.reverseProxy)
+			}
 		}
 	}
 }

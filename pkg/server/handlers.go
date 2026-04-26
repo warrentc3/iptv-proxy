@@ -1,5 +1,6 @@
 /*
  * Iptv-Proxy is a project to proxyfie an m3u file and to proxyfie an Xtream iptv service (client API).
+ * Copyright (C) 2026  warrentc3
  * Copyright (C) 2020  Pierre-Emmanuel Jacquier
  *
  * This program is free software: you can redistribute it and/or modify
@@ -63,7 +64,7 @@ func (c *Config) m3u8ReverseProxy(ctx *gin.Context) {
 }
 
 func (c *Config) stream(ctx *gin.Context, oriURL *url.URL) {
-	client := &http.Client{}
+	client := &http.Client{Timeout: 90 * time.Second}
 
 	req, err := http.NewRequest("GET", oriURL.String(), nil)
 	if err != nil {
@@ -72,11 +73,23 @@ func (c *Config) stream(ctx *gin.Context, oriURL *url.URL) {
 	}
 
 	mergeHttpHeader(req.Header, ctx.Request.Header)
+	req.Header.Del("Authorization")
+	req.Header.Del("Proxy-Authorization")
 
 	resp, err := client.Do(req)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err) // nolint: errcheck
 		return
+	}
+
+	if shouldRetryWithoutRange(resp) {
+		resp.Body.Close()
+		req.Header.Del("Range")
+		resp, err = client.Do(req)
+		if err != nil {
+			ctx.AbortWithError(http.StatusInternalServerError, err) // nolint: errcheck
+			return
+		}
 	}
 	defer resp.Body.Close()
 
@@ -86,6 +99,28 @@ func (c *Config) stream(ctx *gin.Context, oriURL *url.URL) {
 		io.Copy(w, resp.Body) // nolint: errcheck
 		return false
 	})
+}
+
+// shouldRetryWithoutRange reports whether an upstream's 206 Partial Content
+// response is effectively empty — a sign that the upstream advertises range
+// support in the status code but does not actually return the requested
+// bytes. Detection is conservative: only Content-Length: 0 (explicit) is
+// recognized. The body itself is not peeked, so a 206 with chunked encoding
+// or omitted Content-Length that happens to be empty will not trigger the
+// retry. Players given an empty 206 stop instead of falling back to a
+// full-body request, so retrying without Range surfaces playable bytes
+// when the upstream supports a full GET.
+func shouldRetryWithoutRange(resp *http.Response) bool {
+	if resp.StatusCode != http.StatusPartialContent {
+		return false
+	}
+	if resp.ContentLength == 0 {
+		return true
+	}
+	if resp.ContentLength < 0 && resp.Header.Get("Content-Length") == "0" {
+		return true
+	}
+	return false
 }
 
 func (c *Config) xtreamStream(ctx *gin.Context, oriURL *url.URL) {

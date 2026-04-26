@@ -1,5 +1,6 @@
 /*
  * Iptv-Proxy is a project to proxyfie an m3u file and to proxyfie an Xtream iptv service (client API).
+ * Copyright (C) 2026  warrentc3
  * Copyright (C) 2020  Pierre-Emmanuel Jacquier
  *
  * This program is free software: you can redistribute it and/or modify
@@ -32,9 +33,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jamesnetherton/m3u"
 	xtreamapi "github.com/pierre-emmanuelJ/iptv-proxy/pkg/xtream-proxy"
-	uuid "github.com/satori/go.uuid"
 )
 
 type cacheMeta struct {
@@ -57,7 +58,7 @@ func (c *Config) cacheXtreamM3u(playlist *m3u.Playlist, cacheName string) error 
 	tmp := *c
 	tmp.playlist = playlist
 
-	path := filepath.Join(os.TempDir(), uuid.NewV4().String()+".iptv-proxy.m3u")
+	path := filepath.Join(os.TempDir(), uuid.New().String()+".iptv-proxy.m3u")
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -73,7 +74,7 @@ func (c *Config) cacheXtreamM3u(playlist *m3u.Playlist, cacheName string) error 
 }
 
 func (c *Config) xtreamGenerateM3u(ctx *gin.Context, extension string) (*m3u.Playlist, error) {
-	client, err := xtreamapi.New(c.XtreamUser.String(), c.XtreamPassword.String(), c.XtreamBaseURL, ctx.Request.UserAgent())
+	client, err := xtreamapi.New(c.XtreamUser.String(), c.XtreamPassword.String(), c.XtreamBaseURL, c.UpstreamUserAgent(ctx.Request.UserAgent()))
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +253,7 @@ func (c *Config) xtreamPlayerAPI(ctx *gin.Context, q url.Values) {
 		action = q["action"][0]
 	}
 
-	client, err := xtreamapi.New(c.XtreamUser.String(), c.XtreamPassword.String(), c.XtreamBaseURL, ctx.Request.UserAgent())
+	client, err := xtreamapi.New(c.XtreamUser.String(), c.XtreamPassword.String(), c.XtreamBaseURL, c.UpstreamUserAgent(ctx.Request.UserAgent()))
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err) // nolint: errcheck
 		return
@@ -275,7 +276,7 @@ func (c *Config) xtreamPlayerAPI(ctx *gin.Context, q url.Values) {
 }
 
 func (c *Config) xtreamXMLTV(ctx *gin.Context) {
-	client, err := xtreamapi.New(c.XtreamUser.String(), c.XtreamPassword.String(), c.XtreamBaseURL, ctx.Request.UserAgent())
+	client, err := xtreamapi.New(c.XtreamUser.String(), c.XtreamPassword.String(), c.XtreamBaseURL, c.UpstreamUserAgent(ctx.Request.UserAgent()))
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err) // nolint: errcheck
 		return
@@ -371,28 +372,32 @@ func (c *Config) xtreamHlsStream(ctx *gin.Context) {
 	}
 	channel := s[0]
 
-	url, err := getHlsRedirectURL(channel)
+	redirectURL, err := getHlsRedirectURL(channel)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err) // nolint: errcheck
 		return
 	}
 
-	req, err := url.Parse(
-		fmt.Sprintf(
-			"%s://%s/hls/%s/%s",
-			url.Scheme,
-			url.Host,
-			ctx.Param("token"),
-			ctx.Param("chunk"),
-		),
-	)
-
-	if err != nil {
-		ctx.AbortWithError(http.StatusInternalServerError, err) // nolint: errcheck
+	token, ret := ctx.GetQuery("token")
+	if !ret {
+		ctx.AbortWithError( // nolint: errcheck
+			http.StatusBadRequest,
+			errors.New("HLS token missing from request"),
+		)
 		return
 	}
 
-	c.xtreamStream(ctx, req)
+	// Build the upstream URL with proper escaping. token is operator-supplied
+	// upstream content; without escaping, characters like &, =, %, or # would
+	// corrupt the query string or smuggle additional parameters.
+	upstream := &url.URL{
+		Scheme:   redirectURL.Scheme,
+		Host:     redirectURL.Host,
+		Path:     fmt.Sprintf("/hls/%s", ctx.Param("chunk")),
+		RawQuery: url.Values{"token": []string{token}}.Encode(),
+	}
+
+	c.xtreamStream(ctx, upstream)
 }
 
 func (c *Config) xtreamHlsrStream(ctx *gin.Context) {
@@ -440,6 +445,7 @@ func getHlsRedirectURL(channel string) (*url.URL, error) {
 
 func (c *Config) hlsXtreamStream(ctx *gin.Context, oriURL *url.URL) {
 	client := &http.Client{
+		Timeout: 90 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -452,6 +458,8 @@ func (c *Config) hlsXtreamStream(ctx *gin.Context, oriURL *url.URL) {
 	}
 
 	mergeHttpHeader(req.Header, ctx.Request.Header)
+	req.Header.Del("Authorization")
+	req.Header.Del("Proxy-Authorization")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -479,6 +487,8 @@ func (c *Config) hlsXtreamStream(ctx *gin.Context, oriURL *url.URL) {
 			}
 
 			mergeHttpHeader(hlsReq.Header, ctx.Request.Header)
+			hlsReq.Header.Del("Authorization")
+			hlsReq.Header.Del("Proxy-Authorization")
 
 			hlsResp, err := client.Do(hlsReq)
 			if err != nil {
