@@ -30,6 +30,7 @@ import (
 	"github.com/qdm12/gosettings/reader"
 
 	"github.com/warrentc3/iptv-proxy/pkg/config"
+	"github.com/warrentc3/iptv-proxy/pkg/httptrace"
 	"github.com/warrentc3/iptv-proxy/pkg/server"
 )
 
@@ -38,6 +39,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	httptrace.Init(conf.DebugHTTP, conf.DebugHTTPFile)
 	srv, err := server.NewServer(conf)
 	if err != nil {
 		log.Fatal(err)
@@ -168,6 +170,16 @@ func buildConfig() (*config.ProxyConfig, error) {
 		m3uFileName = "iptv.m3u"
 	}
 
+	debugHTTPPtr, err := r.BoolPtr("DEBUG_HTTP")
+	if err != nil {
+		return nil, fmt.Errorf("invalid DEBUG_HTTP: %w", err)
+	}
+	debugHTTP := false
+	if debugHTTPPtr != nil {
+		debugHTTP = *debugHTTPPtr
+	}
+	debugHTTPFile := r.String("DEBUG_HTTP_FILE")
+
 	return &config.ProxyConfig{
 		HostConfig: &config.HostConfiguration{
 			Hostname: r.String("REWRITE_HOSTNAME"),
@@ -185,5 +197,7 @@ func buildConfig() (*config.ProxyConfig, error) {
 		AdvertisedPort:       advertisedPort,
 		HTTPS:                https,
 		M3UFileName:          m3uFileName,
+		DebugHTTP:            debugHTTP,
+		DebugHTTPFile:        debugHTTPFile,
 	}, nil
 }

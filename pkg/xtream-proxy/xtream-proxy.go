@@ -29,6 +29,7 @@ import (
 	"strconv"
 
 	"github.com/warrentc3/iptv-proxy/pkg/config"
+	"github.com/warrentc3/iptv-proxy/pkg/httptrace"
 	xtream "github.com/warrentc3/go.xtream-codes"
 )
 
@@ -55,6 +56,10 @@ func New(user, password, baseURL, userAgent string) (*Client, error) {
 	cli, err := xtream.NewClientWithUserAgent(context.Background(), user, password, baseURL, userAgent)
 	if err != nil {
 		return nil, err
+	}
+
+	if cli.HTTP != nil {
+		cli.HTTP.Transport = httptrace.WrapTransport(cli.HTTP.Transport)
 	}
 
 	return &Client{cli}, nil

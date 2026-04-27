@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jamesnetherton/m3u"
 	"github.com/warrentc3/iptv-proxy/pkg/config"
+	"github.com/warrentc3/iptv-proxy/pkg/httptrace"
 
 	"github.com/gin-gonic/gin"
 )
@@ -93,6 +94,7 @@ func (c *Config) Serve() error {
 
 	router := gin.Default()
 	router.Use(cors.Default())
+	router.Use(httptrace.GinMiddleware())
 	group := router.Group("/")
 	c.routes(group)
 
