@@ -1,0 +1,39 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golangci-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Go
+        uses: actions/setup-go@v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # continue-on-error keeps the lint pass report-only for the first
+      # rounds. Findings show up in the workflow log; PR checks do not
+      # block on them. Flip to false once known-noise is suppressed in
+      # .golangci.yml or via // nolint directives.
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9.2.0
+        continue-on-error: true
+        with:
+          version: v2.11.4
