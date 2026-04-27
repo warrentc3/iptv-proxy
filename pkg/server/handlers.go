@@ -66,9 +66,14 @@ func (c *Config) m3u8ReverseProxy(ctx *gin.Context) {
 }
 
 func (c *Config) stream(ctx *gin.Context, oriURL *url.URL) {
-	client := &http.Client{Timeout: 90 * time.Second}
+	// No client-level Timeout: http.Client.Timeout covers the entire
+	// request including body read, which kills long-lived video streams
+	// at the wall. Lifecycle is bound to the player connection via
+	// NewRequestWithContext(ctx.Request.Context()) — when the player
+	// disconnects, the upstream request cancels too.
+	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", oriURL.String(), nil)
+	req, err := http.NewRequestWithContext(ctx.Request.Context(), "GET", oriURL.String(), nil)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err) // nolint: errcheck
 		return
