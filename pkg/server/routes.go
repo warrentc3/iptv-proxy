@@ -31,7 +31,13 @@ import (
 )
 
 func (c *Config) routes(r *gin.RouterGroup) {
-	r = r.Group(xcpNamespace)
+	// Routes mount at the router root, NOT under /xcp/. The proxy implements
+	// the Xtream-Codes API contract; XC clients (Dispatcharr, players, etc.)
+	// expect /get.php, /player_api.php, /xmltv.php at the standard paths.
+	// The /xcp/ prefix lives only on m3u track routes (see m3uRoutes), where
+	// it carries the structural anti-collision (a username collision with a
+	// reserved word like "live" would conflict with /live/<u>/<p>/:id without
+	// the prefix on track routes).
 
 	//Xtream service endopoints
 	if c.ProxyConfig.XtreamBaseURL != "" {
@@ -96,19 +102,18 @@ func (c *Config) m3uRoutes(r *gin.RouterGroup) {
 		}
 
 		if strings.HasSuffix(track.URI, ".m3u8") {
-			key := fmt.Sprintf("/%s/%s/%d/:id", c.User, c.Password, i)
+			key := fmt.Sprintf("/%s/%s/%s/%d/:id", xcpNamespace, c.User, c.Password, i)
 			if _, exists := registered[key]; !exists {
 				registered[key] = struct{}{}
 				r.GET(key, trackConfig.m3u8ReverseProxy)
 			}
 		} else {
-			// path.Base(u.Path) — single-segment basename from the parsed URL.
-			// Drops query string (avoids the original SOURCE bug of collapsing
-			// query-distinct URIs into the same key) and avoids embedding
-			// multi-segment paths from u.Path that wouldn't match the
-			// player-requested URL emitted by replaceURL (which uses
-			// path.Base on the URI path).
-			key := fmt.Sprintf("/%s/%s/%d/%s", c.User, c.Password, i, path.Base(u.Path))
+			// /xcp/ prefix + path.Base(u.Path) — single-segment basename from
+			// the parsed URL. The /xcp/ literal first segment carries the
+			// structural anti-collision (replaces pierre's random per-startup
+			// fragment); path.Base drops query string AND multi-segment paths
+			// to match what replaceURL emits to the player.
+			key := fmt.Sprintf("/%s/%s/%s/%d/%s", xcpNamespace, c.User, c.Password, i, path.Base(u.Path))
 			if _, exists := registered[key]; !exists {
 				registered[key] = struct{}{}
 				r.GET(key, trackConfig.reverseProxy)

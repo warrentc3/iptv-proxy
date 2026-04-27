@@ -162,10 +162,15 @@ func (c *Config) replaceURL(uri string, trackIndex int, xtream bool) (string, er
 
 	uriPath := oriURL.EscapedPath()
 	if xtream {
+		// XC stream URLs preserve their original path shape (with creds replaced).
+		// XC clients construct these URLs against the standard XC API contract;
+		// no /xcp/ prefix.
 		uriPath = strings.ReplaceAll(uriPath, c.XtreamUser.PathEscape(), c.User.PathEscape())
 		uriPath = strings.ReplaceAll(uriPath, c.XtreamPassword.PathEscape(), c.Password.PathEscape())
 	} else {
-		uriPath = path.Join("/", c.User.PathEscape(), c.Password.PathEscape(), fmt.Sprintf("%d", trackIndex), path.Base(uriPath))
+		// M3U track URLs carry the /xcp/ prefix to match the route key shape
+		// in m3uRoutes (structural anti-collision against reserved-word usernames).
+		uriPath = path.Join("/", xcpNamespace, c.User.PathEscape(), c.Password.PathEscape(), fmt.Sprintf("%d", trackIndex), path.Base(uriPath))
 	}
 
 	basicAuth := oriURL.User.String()
@@ -174,12 +179,11 @@ func (c *Config) replaceURL(uri string, trackIndex int, xtream bool) (string, er
 	}
 
 	newURI := fmt.Sprintf(
-		"%s://%s%s:%d/%s%s",
+		"%s://%s%s:%d%s",
 		protocol,
 		basicAuth,
 		c.HostConfig.Hostname,
 		c.AdvertisedPort,
-		xcpNamespace,
 		uriPath,
 	)
 
