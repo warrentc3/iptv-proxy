@@ -96,9 +96,13 @@ func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	start := time.Now()
 
 	// Capture request body if it fits the buffer-friendly content profile.
+	// Reads the FULL body (not LimitReader) so the downstream consumer
+	// receives the complete payload — the bodyMaxBytes cap is for log
+	// display only, applied in logCapturedBody.
 	var reqBody []byte
 	if req.Body != nil && shouldLogBody(req.Header.Get("Content-Type"), req.ContentLength) {
-		reqBody, _ = io.ReadAll(io.LimitReader(req.Body, bodyMaxBytes))
+		reqBody, _ = io.ReadAll(req.Body)
+		req.Body.Close()
 		req.Body = io.NopCloser(bytes.NewReader(reqBody))
 	}
 
@@ -109,7 +113,7 @@ func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 		}
 	}
 	if len(reqBody) > 0 {
-		sink.Printf("OUT --> [body %d bytes]\n%s", len(reqBody), string(reqBody))
+		logCapturedBody("OUT -->", reqBody)
 	} else if req.Body != nil {
 		sink.Printf("OUT --> [body present, not buffered]")
 	}
@@ -129,16 +133,28 @@ func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	}
 
 	if shouldLogBody(resp.Header.Get("Content-Type"), resp.ContentLength) {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, bodyMaxBytes))
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		resp.Body = io.NopCloser(bytes.NewReader(body))
-		sink.Printf("OUT <-- [body %d bytes]\n%s", len(body), string(body))
+		logCapturedBody("OUT <--", body)
 	} else {
 		sink.Printf("OUT <-- [body content-type=%q content-length=%d, not buffered]",
 			resp.Header.Get("Content-Type"), resp.ContentLength)
 	}
 
 	return resp, nil
+}
+
+// logCapturedBody emits a body line, logging up to bodyMaxBytes of the body
+// for display. The full body is preserved by the caller for downstream
+// consumers — this function only controls what gets written to the trace.
+func logCapturedBody(prefix string, body []byte) {
+	if int64(len(body)) > bodyMaxBytes {
+		sink.Printf("%s [body %d total bytes, logging first %d]\n%s",
+			prefix, len(body), bodyMaxBytes, string(body[:bodyMaxBytes]))
+		return
+	}
+	sink.Printf("%s [body %d bytes]\n%s", prefix, len(body), string(body))
 }
 
 // GinMiddleware returns a gin middleware that logs every inbound request and
@@ -159,9 +175,10 @@ func GinMiddleware() gin.HandlerFunc {
 		}
 
 		if c.Request.Body != nil && shouldLogBody(c.Request.Header.Get("Content-Type"), c.Request.ContentLength) {
-			body, _ := io.ReadAll(io.LimitReader(c.Request.Body, bodyMaxBytes))
+			body, _ := io.ReadAll(c.Request.Body)
+			c.Request.Body.Close()
 			c.Request.Body = io.NopCloser(bytes.NewReader(body))
-			sink.Printf("IN  --> [body %d bytes]\n%s", len(body), string(body))
+			logCapturedBody("IN  -->", body)
 		}
 
 		c.Next()
